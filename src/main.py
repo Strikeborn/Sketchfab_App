@@ -17,6 +17,9 @@ from auto_assign import run_auto_assign
 from push_assignments import push
 from merge_collections import interactive_merge
 print("MAIN FILE:", __file__)
+
+def _noneify(df): return df.where(pd.notna(df), None)
+
 class Ref:
     def __init__(self, value=None): self.value=value
     def set(self, v): self.value=v
@@ -195,12 +198,20 @@ def main(page: ft.Page):
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         vertical_alignment=ft.CrossAxisAlignment.CENTER,
     )
-    page.add(
-        toolbar,              # first bar
-        ft.Divider(),
-        second_bar,           # tabs (left) + counts (right)
-        ft.Divider(),
-        log
+    page.appbar = ft.AppBar(
+        title=ft.Text("Sketchfab Collections — Desktop"),
+        bgcolor=ft.colors.SURFACE_VARIANT,
+        actions=[  # reuse your existing buttons
+            # turn each into IconButton or keep ElevatedButton inside a Row
+            ft.Row(
+                controls=[
+                    # from ui.toolbar.build_toolbar(...) return a Row of IconButtons
+                    # or inline the buttons here – either way they live in AppBar now
+                ],
+                wrap=False,
+                spacing=8,
+            )
+        ],
     )
 
         # now it's safe to log + load workbook
