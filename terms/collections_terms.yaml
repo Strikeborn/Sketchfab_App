@@ -1,0 +1,21 @@
+single_assignment_collections:
+  - hands
+  - gauntlets
+  - helmets
+
+negative_terms:
+  - lowpoly test
+  - wip
+
+collections:
+  Props:
+    include_terms: [prop, props, asset, kitbash]
+    tag_terms: [prop, props]
+    exclude_terms: []
+    fuzzy_threshold: 86
+    
+<Your Collection>:
+  include_terms: [term1, term2, term3]
+  # tag_terms: [term1, term2, term3]
+  exclude_terms: []
+  fuzzy_threshold: 88

@@ -1,0 +1,10 @@
+flet==0.28.3
+flet-cli==0.28.3
+watchdog>=4.0.0
+python-dotenv
+pandas
+openpyxl
+requests
+rapidfuzz
+PyYAML
+tqdm
