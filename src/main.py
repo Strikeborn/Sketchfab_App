@@ -200,7 +200,7 @@ def main(page: ft.Page):
     )
     page.appbar = ft.AppBar(
         title=ft.Text("Sketchfab Collections — Desktop"),
-        bgcolor=ft.colors.SURFACE_VARIANT,
+        bgcolor=ft.Colors.SURFACE,
         actions=[  # reuse your existing buttons
             # turn each into IconButton or keep ElevatedButton inside a Row
             ft.Row(
