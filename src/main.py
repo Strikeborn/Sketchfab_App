@@ -156,5 +156,14 @@ def main(page: ft.Page):
 
     page.add(toolbar, ft.Divider(), tabs, ft.Divider(), log)
 
+        # now it's safe to log + load workbook
+    try:
+        likes0, colls0 = read_workbook()
+        state.liked_df, state.colls_df = likes0, colls0
+        refresh_tables()
+        info(f"Startup load: liked={len(likes0)} rows, collections={len(colls0)} rows")
+    except Exception:
+        info("No workbook yet — click Collect.")
+
 if __name__ == "__main__":
     ft.app(target=main)
