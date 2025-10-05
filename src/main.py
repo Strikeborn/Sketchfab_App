@@ -9,6 +9,7 @@ from ui.tabs_liked import LikedTab
 from ui.tabs_collections import CollectionsTab
 from ui.tabs_report import ReportTab
 from ui.log_view import LogView
+from ui.pager import build_pager
 from data_io import read_workbook, write_workbook
 from collector import build_workbook  # assumes your collector exposes this
 from matching import Terms
@@ -37,12 +38,43 @@ def main(page: ft.Page):
         ft.Tab(text="Report / Terms", content=report_tab),
     ])
 
+    
+    # counts (right side of second bar)
+    counts = ft.Text("", selectable=False)
+    second_bar = ft.Row([tabs, counts], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+
     overwrite_ref = Ref(False)
     dry_run_ref = Ref(True)
 
+    def refresh_counts():
+        counts.value = f"Liked: {len(state.liked_df)} • Collections: {len(state.colls_df)}"
+        counts.update()
+
+    def apply_pagers():
+        # rebuild pagers each time counts/pages change
+        liked_pager = build_pager(
+            total_rows=len(state.liked_df),
+            page=state.liked_page,
+            page_size=state.page_size,
+            on_change_page=lambda p: (setattr(state, "liked_page", p), liked_tab.set_df(state.liked_df, p, state.page_size)),
+            on_change_size=lambda s: (setattr(state, "page_size", s), setattr(state, "liked_page", 0), liked_tab.set_df(state.liked_df, 0, s)),
+        )
+        colls_pager = build_pager(
+            total_rows=len(state.colls_df),
+            page=state.colls_page,
+            page_size=state.page_size,
+            on_change_page=lambda p: (setattr(state, "colls_page", p), colls_tab.set_df(state.colls_df, p, state.page_size)),
+            on_change_size=lambda s: (setattr(state, "page_size", s), setattr(state, "colls_page", 0), colls_tab.set_df(state.colls_df, 0, s)),
+        )
+        liked_tab.pager.controls = [liked_pager]
+        colls_tab.pager.controls = [colls_pager]
+        liked_tab.update(); colls_tab.update()
+
     def refresh_tables():
-        liked_tab.set_df(state.liked_df)
-        colls_tab.set_df(state.colls_df)
+        liked_tab.set_df(state.liked_df, state.liked_page, state.page_size)
+        colls_tab.set_df(state.colls_df, state.colls_page, state.page_size)
+        refresh_counts()
+        apply_pagers()
 
     def info(msg): log.append(msg); page.update()
 
@@ -145,16 +177,8 @@ def main(page: ft.Page):
         overwrite_ref=overwrite_ref,
         dry_run_ref=dry_run_ref,
     )
-    # Try to load existing workbook on startup
-    try:
-        likes0, colls0 = read_workbook()
-        state.liked_df, state.colls_df = likes0, colls0
-        refresh_tables()
-        info(f"Startup load: liked={len(likes0)} rows, collections={len(colls0)} rows")
-    except Exception:
-        info("No workbook yet — click Collect.")
-
-    page.add(toolbar, ft.Divider(), tabs, ft.Divider(), log)
+    
+    page.add(toolbar, ft.Divider(), second_bar, ft.Divider(), log)
 
         # now it's safe to log + load workbook
     try:

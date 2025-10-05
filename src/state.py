@@ -11,3 +11,7 @@ class AppState:
     dry_run: bool = True
     busy: bool = False
     username: str = ""
+    # paging
+    liked_page: int = 0
+    colls_page: int = 0
+    page_size: int = 50
