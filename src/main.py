@@ -32,11 +32,6 @@ def main(page: ft.Page):
     liked_tab = LikedTab()
     colls_tab = CollectionsTab()
     report_tab = ReportTab(on_find_similar=lambda: do_merge())
-    tabs = ft.Tabs(expand=True, tabs=[
-        ft.Tab(text="Liked Models", content=liked_tab),
-        ft.Tab(text="Collections", content=colls_tab),
-        ft.Tab(text="Report / Terms", content=report_tab),
-    ])
 
     overwrite_ref = Ref(False)
     dry_run_ref = Ref(True)
