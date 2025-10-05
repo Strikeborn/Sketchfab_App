@@ -1,8 +1,12 @@
 # ui/tabs_collections.py
 import flet as ft
 import math
+import pandas as pd
 
 PLACEHOLDER_COL = ft.DataColumn(ft.Text("No data yet"))
+
+def _fmt(v):
+    return "None" if pd.isna(v) else str(v)  # pd.isna handles NaN/NaT/<NA> cleanly. :contentReference[oaicite:2]{index=2}
 
 class CollectionsTab(ft.Column):
 	def __init__(self):
@@ -31,9 +35,9 @@ class CollectionsTab(ft.Column):
 		# render
 		self.table.columns = [ft.DataColumn(ft.Text(c)) for c in df.columns]
 		self.table.rows = [
-			ft.DataRow(
-				cells=[ft.DataCell(ft.Text("" if v is None else str(v))) for v in row]
-			)
-			for row in dfp.itertuples(index=False, name=None)
-		]
+            ft.DataRow(
+                cells=[ft.DataCell(ft.Text(_fmt(v))) for v in row]
+            )
+            for row in dfp.itertuples(index=False, name=None)
+        ]
 		self.update()

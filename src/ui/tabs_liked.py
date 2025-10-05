@@ -1,7 +1,11 @@
 import flet as ft
 import math
+import pandas as pd
 
 PLACEHOLDER_COL = ft.DataColumn(ft.Text("No data yet"))
+
+def _fmt(v):
+    return "None" if pd.isna(v) else str(v)  # pd.isna handles NaN/NaT/<NA> cleanly. :contentReference[oaicite:2]{index=2}
 
 class LikedTab(ft.Column):
     def __init__(self):
@@ -26,7 +30,10 @@ class LikedTab(ft.Column):
 
         self.table.columns = [ft.DataColumn(ft.Text(c)) for c in df.columns]
         self.table.rows = [
-            ft.DataRow(cells=[ft.DataCell(ft.Text("" if v is None else str(v))) for v in row])
+            ft.DataRow(
+                cells=[ft.DataCell(ft.Text(_fmt(v))) for v in row]
+            )
             for row in dfp.itertuples(index=False, name=None)
         ]
         self.update()
+    

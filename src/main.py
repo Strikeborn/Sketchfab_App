@@ -21,6 +21,11 @@ class Ref:
     def __init__(self, value=None): self.value=value
     def set(self, v): self.value=v
 
+def _noneify(df):
+    # Turn any missing (NaN/NaT/<NA>) into real Python None
+    # so downstream rendering doesn’t show "nan".
+    return df.where(pd.notna(df), None)   # pd.notna / pd.isna are the canonical checks. :contentReference[oaicite:0]{index=0}
+
 def main(page: ft.Page):
     page.title = "Sketchfab Collections — Desktop"
     page.padding = 10
@@ -81,6 +86,7 @@ def main(page: ft.Page):
             info("Collecting from Sketchfab…")
             build_workbook()                      # writes data/sketchfab_data.xlsx
             likes, colls = read_workbook()        # load back into DataFrames
+            likes, colls = _noneify(likes), _noneify(colls)
             info(f"Loaded: liked={len(likes)} rows, collections={len(colls)} rows")
             state.liked_df, state.colls_df = likes, colls
             refresh_tables()
@@ -114,6 +120,7 @@ def main(page: ft.Page):
             info(f"Auto-assign (overwrite={overwrite_ref.value})…")
             likes, colls = read_workbook()
             likes2 = run_auto_assign(likes, overwrite=overwrite_ref.value)
+            likes2 = _noneify(likes2)
             write_workbook(likes2, colls)
             state.liked_df = likes2
             refresh_tables()
@@ -188,7 +195,13 @@ def main(page: ft.Page):
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         vertical_alignment=ft.CrossAxisAlignment.CENTER,
     )
-    page.add(toolbar, ft.Divider(), second_bar, ft.Divider(), log)
+    page.add(
+        toolbar,              # first bar
+        ft.Divider(),
+        second_bar,           # tabs (left) + counts (right)
+        ft.Divider(),
+        log
+    )
 
         # now it's safe to log + load workbook
     try:
