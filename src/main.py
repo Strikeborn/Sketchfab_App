@@ -38,11 +38,6 @@ def main(page: ft.Page):
         ft.Tab(text="Report / Terms", content=report_tab),
     ])
 
-    
-    # counts (right side of second bar)
-    counts = ft.Text("", selectable=False)
-    second_bar = ft.Row([tabs, counts], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-
     overwrite_ref = Ref(False)
     dry_run_ref = Ref(True)
 
@@ -51,20 +46,25 @@ def main(page: ft.Page):
         counts.update()
 
     def apply_pagers():
-        # rebuild pagers each time counts/pages change
         liked_pager = build_pager(
             total_rows=len(state.liked_df),
             page=state.liked_page,
             page_size=state.page_size,
-            on_change_page=lambda p: (setattr(state, "liked_page", p), liked_tab.set_df(state.liked_df, p, state.page_size)),
-            on_change_size=lambda s: (setattr(state, "page_size", s), setattr(state, "liked_page", 0), liked_tab.set_df(state.liked_df, 0, s)),
+            on_change_page=lambda p: (setattr(state, "liked_page", p),
+                                    liked_tab.set_df(state.liked_df, p, state.page_size)),
+            on_change_size=lambda s: (setattr(state, "page_size", s),
+                                    setattr(state, "liked_page", 0),
+                                    liked_tab.set_df(state.liked_df, 0, s)),
         )
         colls_pager = build_pager(
             total_rows=len(state.colls_df),
             page=state.colls_page,
             page_size=state.page_size,
-            on_change_page=lambda p: (setattr(state, "colls_page", p), colls_tab.set_df(state.colls_df, p, state.page_size)),
-            on_change_size=lambda s: (setattr(state, "page_size", s), setattr(state, "colls_page", 0), colls_tab.set_df(state.colls_df, 0, s)),
+            on_change_page=lambda p: (setattr(state, "colls_page", p),
+                                    colls_tab.set_df(state.colls_df, p, state.page_size)),
+            on_change_size=lambda s: (setattr(state, "page_size", s),
+                                    setattr(state, "colls_page", 0),
+                                    colls_tab.set_df(state.colls_df, 0, s)),
         )
         liked_tab.pager.controls = [liked_pager]
         colls_tab.pager.controls = [colls_pager]
@@ -177,7 +177,22 @@ def main(page: ft.Page):
         overwrite_ref=overwrite_ref,
         dry_run_ref=dry_run_ref,
     )
-    
+
+    tabs = ft.Tabs(
+        expand=True,                          # let tabs take the left side
+        scrollable=True,                      # avoid squeezing labels
+        tabs=[
+            ft.Tab(text="Liked Models", content=liked_tab),
+            ft.Tab(text="Collections", content=colls_tab),
+            ft.Tab(text="Report / Terms", content=report_tab),
+        ],
+    )
+
+    counts = ft.Text("", selectable=False)    # lives on the right side
+    second_bar = ft.Row([tabs, counts],
+        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
     page.add(toolbar, ft.Divider(), second_bar, ft.Divider(), log)
 
         # now it's safe to log + load workbook
