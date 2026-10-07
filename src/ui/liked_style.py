@@ -204,5 +204,5 @@ def download_icon_style(downloadable: bool) -> tuple[str, str]:
         return "#4ade80", "Download GLB (marked downloadable on Sketchfab)"
     return (
         "#facc15",
-        "Try download — not marked downloadable (Download API may still work, e.g. Artist / deleted accounts)",
+        "Try download — not marked downloadable (Download API may still work, e.g. deleted accounts)",
     )

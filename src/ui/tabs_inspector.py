@@ -57,7 +57,7 @@ class InspectorTab(ft.Column):
                         win_note
                         + "Pull scene hierarchy, node names, materials, and annotations via Sketchfab’s Viewer API. "
                         "Does not export mesh GLB — use yellow Try download for that. "
-                        "Great for documenting deleted-account models (Artist, etc.) still viewable online.",
+                        "Great for documenting deleted-account models still viewable online.",
                         size=11,
                         color=_MUTED,
                     ),

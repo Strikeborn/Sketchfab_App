@@ -87,7 +87,7 @@ from ui.flet_safe import safe_page_update
 from ui.pager import build_pager
 from data_io import read_workbook, write_workbook, append_browse_results, XL_PATH
 from collector import build_workbook, build_workbook_quick, refresh_subscriptions_sheet
-from app_settings import load_settings, save_settings
+from app_settings import author_scan_config, load_settings, save_settings
 from auto_assign import run_auto_assign
 from push_assignments import pending_push_rows, push
 from sketchfab_client import SketchfabClient
@@ -1796,14 +1796,17 @@ def main(page: ft.Page):
                     extra_names.append(n)
         info(f"Scanning public + subscribed collections for author “{author}”…")
 
+        scan_queries, scan_aliases = author_scan_config(author)
+
         def _work():
             try:
                 res = scan_collections_for_author(
                     SketchfabClient(),
                     author,
+                    collection_queries=scan_queries or None,
                     extra_collection_uids=extra_uids,
                     extra_family_names=extra_names,
-                    author_aliases_extra=["Artist"] if author.casefold() != "Artist" else None,
+                    author_aliases_extra=scan_aliases or None,
                     on_progress=lambda i, t, m: info(m, quiet=(i % 6 != 0)),
                 )
             except Exception as exc:

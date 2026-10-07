@@ -15,12 +15,7 @@ from series_like import (
 )
 from sketchfab_client import SketchfabClient
 
-DEFAULT_COLLECTION_QUERIES = (
-    "Artist",
-    "Artist",
-    "Series Prefix",
-    "Series",
-)
+DEFAULT_COLLECTION_QUERIES: tuple[str, ...] = ()
 
 _MAX_BROAD_QUERIES = 45
 _MAX_PAGES_PER_BROAD = 3
@@ -217,7 +212,7 @@ def expand_author_title_variants(
         seeds,
         family,
         t_max=t_max,
-        expand_compass_family=True,
+        expand_series_family=True,
         expand_generic_family=True,
     )
     wanted -= existing_norms

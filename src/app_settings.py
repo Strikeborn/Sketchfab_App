@@ -19,6 +19,12 @@ DEFAULTS: dict = {
     "custom_window_caption": False,
     "dual_close_buttons": True,
     "hide_console_on_tray": True,
+    # Author collection scan: extra collection search queries, and aliases per
+    # author name ("*" applies to every scan). Personal values live in data/.
+    "author_scan_queries": [],
+    "author_scan_aliases": {},
+    # Known model-name series prefixes for series discovery (e.g. "Studio Series").
+    "series_prefixes": [],
 }
 
 
@@ -44,6 +50,21 @@ def load_settings() -> dict:
     except (TypeError, ValueError):
         out["background_sync_interval_sec"] = 60
     return out
+
+
+def author_scan_config(author: str) -> tuple[list[str], list[str]]:
+    """(collection queries, author aliases) for an author scan, from settings."""
+    s = load_settings()
+    queries = [str(q).strip() for q in (s.get("author_scan_queries") or []) if str(q).strip()]
+    raw = s.get("author_scan_aliases") or {}
+    aliases: list[str] = []
+    if isinstance(raw, dict):
+        want = (author or "").strip().casefold()
+        for k, vals in raw.items():
+            if str(k) == "*" or str(k).strip().casefold() == want:
+                aliases.extend(str(v).strip() for v in (vals or []) if str(v).strip())
+    aliases = [a for a in dict.fromkeys(aliases) if a.casefold() != (author or "").strip().casefold()]
+    return queries, aliases
 
 
 def save_settings(data: dict) -> None:

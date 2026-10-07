@@ -206,7 +206,7 @@ class CollectionModelsView(ft.Column):
         )
         self._author_filter = ft.TextField(
             label="Author",
-            hint_text="Artist",
+            hint_text="Author name",
             width=120,
             dense=True,
             text_size=12,

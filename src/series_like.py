@@ -1,4 +1,4 @@
-"""Discover name-series variants (Series Prefix_*_T0–T10, etc.) and like them on Sketchfab."""
+"""Discover name-series variants (Prefix_*_T0–T10, etc.) and like them on Sketchfab."""
 from __future__ import annotations
 
 import re
@@ -12,35 +12,54 @@ from model_resolve import (
     resolve_by_title,
     series_prefix_from_name,
 )
+from app_settings import load_settings
 from sketchfab_client import SketchfabClient, humanize_sketchfab_error
 
-_COMPASS_PREFIX = re.compile(r"^Series\s+Compass", re.I)
-_COMPASS_MIDDLE = re.compile(
-    r"^Series\s+Compass[_ ](.+?)(?:[_ ]T(\d+)|[_ ](\d{1,2}))?\s*$",
-    re.I,
-)
 _T_SUFFIX = re.compile(r"^(.+)_T(\d+)$", re.I)
 _NUM_SUFFIX = re.compile(r"^(.+)_(\d{1,2})$")
 
 
-def parse_compass_middle(name: str) -> str | None:
-    m = _COMPASS_MIDDLE.match((name or "").strip())
-    if not m:
-        return None
-    mid = (m.group(1) or "").strip()
-    return mid or None
+def known_series_prefixes() -> list[str]:
+    """Series title prefixes from settings (series_prefixes), e.g. "Studio Series"."""
+    raw = load_settings().get("series_prefixes") or []
+    return [str(p).strip() for p in raw if str(p).strip()]
 
 
-def is_compass_name(name: str) -> bool:
-    return bool(_COMPASS_PREFIX.match((name or "").strip()))
+def _prefix_pattern(prefix: str) -> str:
+    return r"\s+".join(re.escape(w) for w in prefix.split())
 
 
-def collect_compass_middles(names: list[str]) -> set[str]:
-    out: set[str] = set()
+def parse_series_middle(name: str, prefixes: list[str] | None = None) -> tuple[str, str] | None:
+    """(prefix, middle) for names like "<Prefix>_<Middle>_T3"."""
+    s = (name or "").strip()
+    for prefix in known_series_prefixes() if prefixes is None else prefixes:
+        m = re.match(
+            rf"^{_prefix_pattern(prefix)}[_ ](.+?)(?:[_ ]T(\d+)|[_ ](\d{{1,2}}))?\s*$", s, re.I
+        )
+        if m:
+            mid = (m.group(1) or "").strip()
+            if mid:
+                return prefix, mid
+    return None
+
+
+def is_known_series_name(name: str, prefixes: list[str] | None = None) -> bool:
+    s = (name or "").strip()
+    return any(
+        re.match(rf"^{_prefix_pattern(p)}", s, re.I)
+        for p in (known_series_prefixes() if prefixes is None else prefixes)
+    )
+
+
+def collect_series_middles(names: list[str]) -> set[tuple[str, str]]:
+    prefixes = known_series_prefixes()
+    out: set[tuple[str, str]] = set()
+    if not prefixes:
+        return out
     for n in names:
-        mid = parse_compass_middle(n)
-        if mid:
-            out.add(mid)
+        hit = parse_series_middle(n, prefixes)
+        if hit:
+            out.add(hit)
     return out
 
 
@@ -64,7 +83,7 @@ def _register_title_aliases(out: set[str], s: str) -> None:
     out.add(s)
     if "_" in s:
         out.add(s.replace("_", " "))
-    # Glued suffix: Series Prefix_Ais_T3 → Series Prefix_AisT3 / Series Prefix AisT3
+    # Glued suffix: Prefix_Name_T3 → Prefix_NameT3 / Prefix NameT3
     m = re.match(r"^(.+)[_ ](T\d+|\d{1,2})$", s, re.I)
     if m:
         stem, suffix = m.group(1), m.group(2)
@@ -100,37 +119,37 @@ def generate_variants(seed: str, *, t_max: int = 10) -> set[str]:
     return out
 
 
-def compass_family_candidates(middles: set[str], *, t_max: int = 10) -> set[str]:
+def series_family_candidates(middles: set[tuple[str, str]], *, t_max: int = 10) -> set[str]:
     out: set[str] = set()
-    for mid in sorted(middles, key=str.casefold):
+    for pre, mid in sorted(middles, key=lambda pm: (pm[0].casefold(), pm[1].casefold())):
         mid = mid.strip()
         if not mid:
             continue
         for i in range(t_max + 1):
             for s in (
-                f"Series Prefix_{mid}_T{i}",
-                f"Series Prefix {mid} T{i}",
-                f"Series Prefix_{mid}T{i}",
-                f"Series Prefix {mid}T{i}",
+                f"{pre}_{mid}_T{i}",
+                f"{pre} {mid} T{i}",
+                f"{pre}_{mid}T{i}",
+                f"{pre} {mid}T{i}",
             ):
                 _register_title_aliases(out, s)
-        for s in (f"Series Prefix_{mid}", f"Series Prefix {mid}"):
+        for s in (f"{pre}_{mid}", f"{pre} {mid}"):
             _register_title_aliases(out, s)
         for i in range(t_max + 1):
             for s in (
-                f"Series Prefix_{mid}_{i:02d}",
-                f"Series Prefix_{mid}_{i}",
-                f"Series Prefix {mid} {i:02d}",
-                f"Series Prefix {mid} {i}",
-                f"Series Prefix_{mid}{i}",
-                f"Series Prefix {mid}{i}",
+                f"{pre}_{mid}_{i:02d}",
+                f"{pre}_{mid}_{i}",
+                f"{pre} {mid} {i:02d}",
+                f"{pre} {mid} {i}",
+                f"{pre}_{mid}{i}",
+                f"{pre} {mid}{i}",
             ):
                 _register_title_aliases(out, s)
     return out
 
 
 def family_candidates_for_prefix(prefix: str, middles: set[str], *, t_max: int = 10) -> set[str]:
-    """Generic T0–T10 / numeric variants for any author prefix (not only Series Prefix)."""
+    """Generic T0–T10 / numeric variants for any author prefix (not only known series)."""
     prefix = (prefix or "").strip()
     if not prefix or not middles:
         return set()
@@ -164,7 +183,7 @@ def wanted_variant_norms(
     all_liked_names: list[str],
     *,
     t_max: int = 10,
-    expand_compass_family: bool = True,
+    expand_series_family: bool = True,
     expand_generic_family: bool = True,
 ) -> set[str]:
     """Normalized title patterns to match from broad search results."""
@@ -172,7 +191,7 @@ def wanted_variant_norms(
         seed_names,
         all_liked_names,
         t_max=t_max,
-        expand_compass_family=expand_compass_family,
+        expand_series_family=expand_series_family,
         expand_generic_family=expand_generic_family,
     )
     return {normalize_name(n) for n in names if (n or "").strip()}
@@ -189,22 +208,25 @@ def broad_variant_search_queries(
     """Few broad catalog queries instead of one API call per candidate title."""
     author = (author or "").strip()
     names = list(dict.fromkeys([*(seed_names or []), *(all_liked_names or [])]))
-    middles = sorted(collect_compass_middles(names), key=str.casefold)[:max(1, max_middles)]
+    middles = sorted(
+        collect_series_middles(names), key=lambda pm: (pm[0].casefold(), pm[1].casefold())
+    )[:max(1, max_middles)]
     raw: list[str] = []
 
-    if author:
-        raw.extend([f"Series Prefix {author}", f"{author} Series Prefix", f"{author} Series"])
-    raw.append("Series Prefix")
-
-    for mid in middles:
-        raw.append(f"Series Prefix {mid}")
+    for pre in known_series_prefixes():
         if author:
-            raw.append(f"Series Prefix {mid} {author}")
+            raw.extend([f"{pre} {author}", f"{author} {pre}"])
+        raw.append(pre)
+
+    for pre, mid in middles:
+        raw.append(f"{pre} {mid}")
+        if author:
+            raw.append(f"{pre} {mid} {author}")
 
     prefixes: set[str] = set()
     for n in names:
         p = series_prefix_from_name(n)
-        if p and not is_compass_name(p):
+        if p and not is_known_series_name(p):
             prefixes.add(p)
     for p in sorted(prefixes, key=str.casefold)[:max(1, max_prefixes)]:
         if author:
@@ -305,7 +327,7 @@ def build_candidate_names(
     all_liked_names: list[str],
     *,
     t_max: int = 10,
-    expand_compass_family: bool = True,
+    expand_series_family: bool = True,
     expand_generic_family: bool = True,
 ) -> list[str]:
     """Deduped search strings, excluding names already in likes (by normalized name)."""
@@ -316,13 +338,13 @@ def build_candidate_names(
     for name in seeds:
         raw.update(generate_variants(name, t_max=t_max))
 
-    if expand_compass_family:
+    if expand_series_family:
         family_names = list(all_liked_names) + seeds
-        middles = collect_compass_middles(family_names)
+        middles = collect_series_middles(family_names)
         if not middles and seeds:
-            middles = collect_compass_middles(seeds)
+            middles = collect_series_middles(seeds)
         if middles:
-            raw.update(compass_family_candidates(middles, t_max=t_max))
+            raw.update(series_family_candidates(middles, t_max=t_max))
 
     if expand_generic_family:
         prefixes: set[str] = set()
@@ -336,7 +358,7 @@ def build_candidate_names(
             if p:
                 prefixes.add(p)
         for prefix in prefixes:
-            if is_compass_name(prefix):
+            if is_known_series_name(prefix):
                 continue
             mids = middles_for_prefix(family_names, prefix)
             if mids:
@@ -396,7 +418,7 @@ def run_series_like(
     liked_uids: set[str],
     seed_authors: list[str] | None = None,
     t_max: int = 10,
-    expand_compass_family: bool = True,
+    expand_series_family: bool = True,
     on_progress=None,
     should_cancel=None,
     pause_s: float = 0.05,
@@ -405,7 +427,7 @@ def run_series_like(
         seed_names,
         all_liked_names,
         t_max=t_max,
-        expand_compass_family=expand_compass_family,
+        expand_series_family=expand_series_family,
     )
     res = SeriesLikeResult(candidates=len(candidates))
     total = len(candidates)

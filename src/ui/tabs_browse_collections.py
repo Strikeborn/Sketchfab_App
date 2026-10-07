@@ -73,7 +73,7 @@ class BrowseCollectionsTab(ft.Column):
         )
         self._author_scan = ft.TextField(
             label="Find author in collections",
-            hint_text="Artist — scans web + your subscriptions",
+            hint_text="Author — scans web + your subscriptions",
             width=220,
             dense=True,
             text_size=12,
@@ -130,7 +130,7 @@ class BrowseCollectionsTab(ft.Column):
                                         "Scan author",
                                         icon=ft.Icons.PERSON_SEARCH,
                                         height=36,
-                                        tooltip="Search public collections for Artist etc., open models by that author",
+                                        tooltip="Search public collections for an author, open models by that author",
                                         on_click=lambda e: self._scan_author(),
                                     ),
                                     self._load_more,
@@ -336,7 +336,7 @@ class BrowseCollectionsTab(ft.Column):
     def _scan_author(self) -> None:
         author = (self._author_scan.value or "").strip()
         if not author:
-            self._status.value = "Enter an author name (e.g. Artist) to scan collections."
+            self._status.value = "Enter an author name to scan collections."
             try:
                 self.update()
             except Exception:

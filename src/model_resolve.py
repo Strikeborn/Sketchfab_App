@@ -125,7 +125,7 @@ def resolve_uid(client: SketchfabClient, title: str, author: str | None = None) 
 def series_prefix_from_name(name: str) -> str | None:
     """
     Infer a shared prefix for family expansion, e.g.
-    Series Prefix_Ais_T3 → Series Prefix
+    Series Name_Char_T3 → Series Name
     Artist_Character_03 → Artist
     """
     s = (name or "").strip()
@@ -146,7 +146,7 @@ def series_prefix_from_name(name: str) -> str | None:
 
 
 def middles_for_prefix(names: list[str], prefix: str) -> set[str]:
-    """Middle segments sharing a title prefix (Series Prefix_{mid}_T3, etc.)."""
+    """Middle segments sharing a title prefix (Prefix_{mid}_T3, etc.)."""
     pref = normalize_name(prefix)
     if not pref:
         return set()
