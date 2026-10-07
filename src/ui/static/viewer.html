@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sketchfab Preview</title>
+  <script src="https://static.sketchfab.com/api/sketchfab-viewer-1.12.1.js"></script>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #111827;
+      --line: #334155;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --btn: #1e293b;
+      --btn-hover: #334155;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%; background: var(--bg); color: var(--text);
+      font: 12px/1.4 system-ui, Segoe UI, sans-serif; overflow: hidden;
+    }
+    #layout {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      height: 100%;
+    }
+    #top {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+    #title { font-weight: 600; font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #uid { color: var(--muted); font-size: 11px; }
+    #stage-wrap {
+      position: relative; min-height: 0; background: #000;
+    }
+    #api-frame {
+      width: 100%; height: 100%; border: 0; display: block;
+    }
+    #tools {
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      padding: 8px 10px; background: var(--panel);
+      border-top: 1px solid var(--line);
+    }
+    button, a.btn {
+      appearance: none; border: 1px solid var(--line); background: var(--btn);
+      color: var(--text); border-radius: 6px; padding: 6px 10px; cursor: pointer;
+      text-decoration: none; font-size: 11px;
+    }
+    button:hover, a.btn:hover { background: var(--btn-hover); border-color: #475569; }
+    button.active { outline: 1px solid var(--accent); color: var(--accent); }
+    button:disabled { opacity: 0.45; cursor: default; }
+    .sep { width: 1px; height: 22px; background: var(--line); margin: 0 2px; }
+    #mats {
+      max-height: 120px; overflow: auto; width: 100%;
+      border-top: 1px solid var(--line); background: #0f172a;
+      padding: 6px 10px; display: none; font-size: 11px; color: var(--muted);
+    }
+    #mats.open { display: block; }
+    #mats h4 { margin: 0 0 4px; color: var(--text); font-size: 11px; }
+    #status { color: var(--muted); margin-left: auto; font-size: 11px; }
+    .hint { color: var(--muted); font-size: 10px; padding: 0 10px 8px; background: var(--panel); }
+    /* Hover overlay: viewport only — fills the exposed card image */
+    body.overlay #layout { grid-template-rows: 1fr; }
+    body.overlay #top,
+    body.overlay #chrome,
+    body.overlay .hint { display: none !important; }
+    body.overlay #stage-wrap { height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="layout">
+    <div id="top">
+      <div>
+        <div id="title">Loading…</div>
+        <div id="uid"></div>
+      </div>
+      <span id="status">init</span>
+    </div>
+    <div id="stage-wrap">
+      <iframe
+        id="api-frame"
+        allow="autoplay; fullscreen; xr-spatial-tracking"
+        allowfullscreen
+        mozallowfullscreen="true"
+        webkitallowfullscreen="true"
+      ></iframe>
+    </div>
+    <div id="chrome">
+      <div id="tools">
+        <button type="button" id="btn-start" title="Start / resume">Start</button>
+        <button type="button" id="btn-stop" title="Stop render loop">Stop</button>
+        <span class="sep"></span>
+        <button type="button" id="btn-wire" title="Wireframe overlay">Wireframe</button>
+        <button type="button" id="btn-insp" title="Inspector">Inspector</button>
+        <button type="button" id="btn-ann" title="Cycle annotations">Annotations</button>
+        <button type="button" id="btn-bg" title="Toggle dark / grey background">BG</button>
+        <button type="button" id="btn-shot" title="Screenshot">Screenshot</button>
+        <span class="sep"></span>
+        <button type="button" id="btn-mats" title="List materials">Materials</button>
+        <a class="btn" id="btn-site" href="#" target="_blank" rel="noopener">Open on Sketchfab</a>
+        <span id="ready-hint" class="hint" style="display:none;padding:0;margin-left:4px;">Rotate · scroll zoom · right-drag pan</span>
+      </div>
+      <div id="mats"><h4>Materials</h4><div id="mats-body"></div></div>
+      <div class="hint">Sketchfab Viewer API — orbit / materials / lighting as published. Not a full editor.</div>
+    </div>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    let uid = (params.get("uid") || "").trim();
+    let name = params.get("name") || "";
+    const overlay = params.get("overlay") === "1" || params.get("compact") === "1";
+    if (overlay) document.body.classList.add("overlay");
+    let api = null;
+    let wireOn = false;
+    let inspOn = false;
+    let annIndex = -1;
+    let bgDark = true;
+    let annots = [];
+
+    const $ = (id) => document.getElementById(id);
+    const setStatus = (t) => { $("status").textContent = t; };
+
+    function setTitle() {
+      $("title").textContent = name || uid || "Sketchfab Preview";
+      $("uid").textContent = uid || "";
+      const site = $("btn-site");
+      site.href = uid ? (`https://sketchfab.com/3d-models/${uid}`) : "#";
+      document.title = (name || uid || "Preview") + " · 3D";
+    }
+
+    function bindButtons() {
+      $("btn-start").onclick = () => api && api.start();
+      $("btn-stop").onclick = () => api && api.stop();
+      $("btn-wire").onclick = () => {
+        if (!api) return;
+        wireOn = !wireOn;
+        api.setWireframe(wireOn, {color: '94A3B8FF'}, () => {
+          $("btn-wire").classList.toggle("active", wireOn);
+        });
+      };
+      $("btn-insp").onclick = () => {
+        if (!api) return;
+        inspOn = !inspOn;
+        try {
+          if (inspOn && typeof api.openInspector === "function") api.openInspector();
+          else if (!inspOn && typeof api.closeInspector === "function") api.closeInspector();
+        } catch (e) {}
+        $("btn-insp").classList.toggle("active", inspOn);
+      };
+      $("btn-ann").onclick = () => {
+        if (!api) return;
+        if (!annots.length) {
+          api.getAnnotationList((err, list) => {
+            annots = list || [];
+            if (!annots.length) { setStatus("no annotations"); return; }
+            cycleAnn();
+          });
+        } else cycleAnn();
+      };
+      $("btn-bg").onclick = () => {
+        if (!api) return;
+        bgDark = !bgDark;
+        api.setBackground({ color: bgDark ? [0.04, 0.06, 0.1] : [0.55, 0.58, 0.62] }, () => {
+          $("btn-bg").classList.toggle("active", !bgDark);
+        });
+      };
+      $("btn-shot").onclick = () => {
+        if (!api) return;
+        api.getScreenShot(1920, 1080, "image/png", (err, result) => {
+          if (err || !result) { setStatus("screenshot failed"); return; }
+          const a = document.createElement("a");
+          a.href = result;
+          a.download = (uid || "model") + ".png";
+          a.click();
+          setStatus("screenshot saved");
+        });
+      };
+      $("btn-mats").onclick = () => {
+        const box = $("mats");
+        const open = !box.classList.contains("open");
+        box.classList.toggle("open", open);
+        $("btn-mats").classList.toggle("active", open);
+        if (!open || !api) return;
+        api.getMaterialList((err, materials) => {
+          const body = $("mats-body");
+          if (err || !materials) { body.textContent = "Could not read materials."; return; }
+          body.innerHTML = materials.map((m, i) => {
+            const n = (m && (m.name || m.id)) || ("mat " + i);
+            return `<div>• ${escapeHtml(String(n))}</div>`;
+          }).join("") || "No materials listed.";
+        });
+      };
+    }
+
+    function cycleAnn() {
+      annIndex = (annIndex + 1) % annots.length;
+      api.gotoAnnotation(annIndex, {}, () => setStatus("annotation " + (annIndex + 1) + "/" + annots.length));
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+
+    function initViewer() {
+      if (!uid) {
+        setStatus("no model uid");
+        $("title").textContent = "No model selected";
+        return;
+      }
+      setTitle();
+      setStatus("loading…");
+      const client = new Sketchfab($("api-frame"));
+      client.init(uid, {
+        success: function (a) {
+          api = a;
+          api.addEventListener("viewerready", function () {
+            setStatus("ready");
+            $("ready-hint").style.display = "inline";
+            api.getAnnotationList(function (err, list) { annots = list || []; });
+          });
+          api.start();
+        },
+        error: function () {
+          setStatus("viewer error");
+          $("title").textContent = "Could not load viewer";
+        },
+        ui_inspector: overlay ? 0 : 1,
+        ui_annotations: overlay ? 0 : 1,
+        ui_settings: overlay ? 0 : 1,
+        ui_vr: 0,
+        ui_fullscreen: overlay ? 0 : 1,
+        ui_infos: overlay ? 0 : 1,
+        ui_stop: 0,
+        ui_watermark: overlay ? 0 : 1,
+        ui_controls: overlay ? 0 : 1,
+        ui_hint: 0,
+        ui_help: 0,
+        ui_loading: 1,
+        preload: 1,
+        autostart: 1,
+        transparent: 0,
+        camera: 1,
+      });
+    }
+
+    if (!overlay) bindButtons();
+    if (!uid) {
+      fetch("/api/model").then(r => r.json()).then((d) => {
+        uid = d.uid || "";
+        name = d.name || name;
+        initViewer();
+      }).catch(initViewer);
+    } else {
+      initViewer();
+    }
+  </script>
+</body>
+</html>

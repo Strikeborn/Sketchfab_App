@@ -71,7 +71,7 @@ def cmd_collect(args):
 
 def cmd_match(args):
     terms = Terms.from_yaml(TERMS_PATH)
-    liked_df, cols_df = read_workbook()
+    liked_df, cols_df, _subs_df = read_workbook()
 
     from .auto_assign import SUG_COL, FUZZY_COL
     # Only recompute suggestions; don't touch Assigned here
@@ -88,7 +88,7 @@ def cmd_match(args):
 
 def cmd_auto_assign(args):
     terms = Terms.from_yaml(TERMS_PATH)
-    liked_df, cols_df = read_workbook()
+    liked_df, cols_df, _subs_df = read_workbook()
 
     updated = run_auto_assign(liked_df, terms, overwrite=args.overwrite)
     write_workbook(updated, cols_df)
@@ -96,14 +96,14 @@ def cmd_auto_assign(args):
 
 
 def cmd_push(args):
-    liked_df, cols_df = read_workbook()
+    liked_df, cols_df, _subs_df = read_workbook()
     client = SketchfabClient()
     push(liked_df, cols_df, client, dry_run=args.dry_run)
 
 
 def cmd_report(args):
     import collections
-    liked_df, _ = read_workbook()
+    liked_df, _, _subs_df = read_workbook()
     pending = liked_df[(liked_df["Assigned Collection(s)"].isna()) | (liked_df["Assigned Collection(s)"] == "")]
     print(f"Unassigned models: {len(pending)}")
 
@@ -125,7 +125,7 @@ def cmd_report(args):
 
 
 def cmd_merge(args):
-    liked_df, cols_df = read_workbook()
+    liked_df, cols_df, _subs_df = read_workbook()
     client = SketchfabClient()
     interactive_merge(cols_df, client)
 

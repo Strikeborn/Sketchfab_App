@@ -1,3 +1,19 @@
+# --- Project: personal data, never commit ---
+/data/*
+!/data/.gitkeep
+/src/data/
+/logs/
+*.xlsx
+*.xlsx.bak
+*.bak
+*.log
+check_out.txt
+.env
+.env.*
+Sketchfab_Downloads/
+*.zip
+.claude/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -5,8 +21,6 @@ __pycache__/
 
 # C extensions
 *.so
-/data/*
-!/data/.gitkeep
 # Distribution / packaging
 .Python
 build/

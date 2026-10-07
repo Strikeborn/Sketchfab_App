@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sketchfab 3D Inspector</title>
+  <script src="https://static.sketchfab.com/api/sketchfab-viewer-1.12.1.js"></script>
+  <style>
+    :root {
+      --bg: #0b1220; --panel: #111827; --line: #334155;
+      --text: #e5e7eb; --muted: #94a3b8; --accent: #38bdf8; --warn: #facc15;
+      --btn: #1e293b; --btn-hover: #334155;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+      font: 12px/1.45 system-ui, Segoe UI, sans-serif; }
+    #layout { display: grid; grid-template-columns: 1fr 380px; grid-template-rows: auto 1fr; height: 100%; }
+    #top { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+    #title { font-weight: 600; font-size: 14px; flex: 1; }
+    #uid { color: var(--muted); font-size: 11px; }
+    #stage-wrap { min-height: 0; background: #000; position: relative; }
+    #api-frame { width: 100%; height: 100%; border: 0; display: block; }
+    #side { min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--panel); }
+    #tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); }
+    #out { flex: 1; min-height: 0; overflow: auto; padding: 8px; font-family: ui-monospace, Consolas, monospace; font-size: 10px;
+      white-space: pre-wrap; word-break: break-word; color: var(--muted); }
+    button, a.btn { appearance: none; border: 1px solid var(--line); background: var(--btn); color: var(--text);
+      border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 11px; text-decoration: none; }
+    button:hover { background: var(--btn-hover); }
+    button.primary { border-color: #0369a1; color: var(--accent); }
+    button.warn { border-color: #854d0e; color: var(--warn); }
+    #status { margin-left: auto; color: var(--muted); font-size: 11px; }
+    .hint { padding: 8px; font-size: 10px; color: var(--muted); border-top: 1px solid var(--line); }
+  </style>
+</head>
+<body>
+  <div id="layout">
+    <div id="top">
+      <div>
+        <div id="title">3D Inspector</div>
+        <div id="uid"></div>
+      </div>
+      <span id="status">init</span>
+    </div>
+    <div id="stage-wrap"><iframe id="api-frame" allow="autoplay; fullscreen; xr-spatial-tracking" allowfullscreen></iframe></div>
+    <div id="side">
+      <div id="tools">
+        <button type="button" class="primary" id="btn-dump">Export scene JSON</button>
+        <button type="button" id="btn-nodes">Nodes only</button>
+        <button type="button" id="btn-mats">Materials only</button>
+        <button type="button" id="btn-copy">Copy JSON</button>
+        <button type="button" id="btn-dl">Download .json</button>
+        <button type="button" id="btn-shot">Screenshot</button>
+        <a class="btn" id="btn-site" href="#" target="_blank" rel="noopener">Sketchfab</a>
+      </div>
+      <pre id="out">Load a model, then Export scene JSON.
+
+Includes: scene graph, node map (names/types/instanceIDs), materials, annotations.
+Does NOT include downloadable mesh geometry — use the app’s Download API (yellow button) for GLB.</pre>
+      <div class="hint">Viewer API metadata only. Rig/bones appear as node names/types when the uploader included them.</div>
+    </div>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    let uid = (params.get("uid") || "").trim();
+    let name = params.get("name") || "";
+    let api = null;
+    let lastDump = null;
+
+    const $ = (id) => document.getElementById(id);
+    const setStatus = (t) => { $("status").textContent = t; };
+    const setOut = (t) => { $("out").textContent = t; };
+
+    function setTitle() {
+      $("title").textContent = name || uid || "3D Inspector";
+      $("uid").textContent = uid || "";
+      $("btn-site").href = uid ? `https://sketchfab.com/3d-models/${uid}` : "#";
+    }
+
+    function slimNode(n) {
+      if (!n || typeof n !== "object") return null;
+      const o = {
+        name: n.name,
+        instanceID: n.instanceID,
+        type: n.type,
+        materialID: n.materialID != null ? n.materialID : null,
+      };
+      if (Array.isArray(n.children) && n.children.length) {
+        o.children = n.children.map(slimNode).filter(Boolean);
+      }
+      return o;
+    }
+
+    function nodeMapToList(nodeMap) {
+      if (!nodeMap || typeof nodeMap !== "object") return [];
+      const out = [];
+      Object.keys(nodeMap).forEach((id) => {
+        const n = nodeMap[id];
+        if (!n) return;
+        out.push({
+          instanceID: n.instanceID != null ? n.instanceID : id,
+          name: n.name,
+          type: n.type,
+          materialID: n.materialID,
+          hasMatrix: !!(n.localMatrix || n.worldMatrix),
+        });
+      });
+      out.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+      return out;
+    }
+
+    function slimMaterial(m) {
+      if (!m || typeof m !== "object") return null;
+      const channels = {};
+      Object.keys(m).forEach((k) => {
+        if (k === "name" || k === "id" || k === "uid") return;
+        const v = m[k];
+        if (v && typeof v === "object" && !Array.isArray(v)) {
+          channels[k] = JSON.parse(JSON.stringify(v));
+        }
+      });
+      return { name: m.name, id: m.id, channels };
+    }
+
+    function collectDump(cb) {
+      if (!api) return cb(new Error("viewer not ready"));
+      const dump = { uid, name, exportedAt: new Date().toISOString(), nodes: [], sceneGraph: null, materials: [], annotations: [], notes: [] };
+      let pending = 4;
+      let err = null;
+      function done() {
+        pending--;
+        if (pending <= 0) cb(err, dump);
+      }
+      api.getNodeMap((e, nodeMap) => {
+        if (e) err = e;
+        dump.nodes = nodeMapToList(nodeMap);
+        const rigLike = dump.nodes.filter((n) => /bone|rig|armature|joint|skeleton/i.test(String(n.name || "") + String(n.type || "")));
+        if (rigLike.length) dump.rigHints = rigLike;
+        done();
+      });
+      api.getSceneGraph((e, graph) => {
+        if (e) err = err || e;
+        dump.sceneGraph = slimNode(graph);
+        done();
+      });
+      api.getMaterialList((e, mats) => {
+        if (e) err = err || e;
+        dump.materials = (mats || []).map(slimMaterial).filter(Boolean);
+        done();
+      });
+      api.getAnnotationList((e, ann) => {
+        if (e) err = err || e;
+        dump.annotations = (ann || []).map((a) => ({
+          title: a.title, content: a.content, eye: a.eye, target: a.target,
+        }));
+        done();
+      });
+    }
+
+    function showDump(dump) {
+      lastDump = dump;
+      const summary = [
+        `uid: ${dump.uid}`,
+        `nodes: ${(dump.nodes || []).length}`,
+        `materials: ${(dump.materials || []).length}`,
+        `annotations: ${(dump.annotations || []).length}`,
+        dump.rigHints ? `rig/bone-like nodes: ${dump.rigHints.length}` : "",
+      ].filter(Boolean).join(" · ");
+      setStatus(summary);
+      setOut(JSON.stringify(dump, null, 2));
+    }
+
+    function bindButtons() {
+      $("btn-dump").onclick = () => {
+        setStatus("collecting…");
+        collectDump((err, dump) => {
+          if (err) { setStatus("export failed"); return; }
+          showDump(dump);
+        });
+      };
+      $("btn-nodes").onclick = () => {
+        if (!api) return;
+        api.getNodeMap((err, nodeMap) => {
+          if (err) return;
+          lastDump = { uid, nodes: nodeMapToList(nodeMap) };
+          setOut(JSON.stringify(lastDump, null, 2));
+        });
+      };
+      $("btn-mats").onclick = () => {
+        if (!api) return;
+        api.getMaterialList((err, mats) => {
+          if (err) return;
+          lastDump = { uid, materials: (mats || []).map(slimMaterial).filter(Boolean) };
+          setOut(JSON.stringify(lastDump, null, 2));
+        });
+      };
+      $("btn-copy").onclick = async () => {
+        const t = $("out").textContent || "";
+        try {
+          await navigator.clipboard.writeText(t);
+          setStatus("copied");
+        } catch (e) {
+          setStatus("copy failed");
+        }
+      };
+      $("btn-dl").onclick = () => {
+        const t = $("out").textContent || "";
+        const blob = new Blob([t], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = (uid || "scene") + "_inspector.json";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      };
+      $("btn-shot").onclick = () => {
+        if (!api) return;
+        api.getScreenShot(1920, 1080, "image/png", (err, result) => {
+          if (err || !result) { setStatus("screenshot failed"); return; }
+          const a = document.createElement("a");
+          a.href = result;
+          a.download = (uid || "model") + ".png";
+          a.click();
+          setStatus("screenshot saved");
+        });
+      };
+    }
+
+    function initViewer() {
+      if (!uid) {
+        setStatus("no uid");
+        return;
+      }
+      setTitle();
+      setStatus("loading…");
+      const client = new Sketchfab($("api-frame"));
+      client.init(uid, {
+        success(a) {
+          api = a;
+          api.addEventListener("viewerready", () => {
+            setStatus("ready — Export scene JSON");
+            collectDump((err, dump) => {
+              if (!err) showDump(dump);
+            });
+          });
+          api.start();
+        },
+        error() { setStatus("viewer error"); },
+        ui_inspector: 1,
+        ui_annotations: 1,
+        ui_settings: 0,
+        ui_vr: 0,
+        ui_watermark: 0,
+        autostart: 1,
+        preload: 1,
+      });
+    }
+
+    bindButtons();
+    if (!uid) {
+      fetch("/api/model").then((r) => r.json()).then((d) => {
+        uid = d.uid || "";
+        name = d.name || name;
+        initViewer();
+      }).catch(initViewer);
+    } else {
+      initViewer();
+    }
+  </script>
+</body>
+</html>

@@ -8,3 +8,5 @@ requests
 rapidfuzz
 PyYAML
 tqdm
+Pillow>=10.0.0
+pystray>=0.19.0
